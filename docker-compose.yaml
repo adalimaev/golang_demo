@@ -1,0 +1,54 @@
+version: "2.3"
+
+services:
+  app:
+    build:
+      dockerfile: Dockerfile
+      context: .
+    image: app-demo
+    container_name: app-demo
+    environment:
+      - APP_PORT=8099
+      - DB_ADDRESS=172.29.29.1
+      - DB_PORT=3306
+      - DB_NAME=test
+      - DB_USERNAME=user
+      - DB_PASSWORD=password
+      - DB_ROOT_PASSWORD=password
+    working_dir: /
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8099:8099"
+    networks:
+      mynet:
+        ipv4_address: 172.29.29.3
+
+  db:
+    image: mysql
+    container_name: mysql-demo
+    environment:
+      - MYSQL_DATABASE=test
+      - MYSQL_USER=user
+      - MYSQL_PASSWORD=password
+      - MYSQL_ROOT_PASSWORD=password
+    restart: always
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+    networks:
+      mynet:
+        ipv4_address: 172.29.29.2
+
+networks:
+  mynet:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+      - subnet: 172.29.29.0/24
+        gateway: 172.29.29.1
