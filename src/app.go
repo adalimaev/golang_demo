@@ -128,9 +128,9 @@ var startTime time.Time = time.Now()
 // LOGS Making
 func logRecordMaker(logFilePath string, fileMode string, content string) {
 	timestamp := time.Now().Format("2006-01-02 15:04:05")
-	log := fmt.Sprintf("[%s]: %s\n", timestamp, content)
-	fmt.Print(log)
-	writeToFile(logFilePath, log, fileMode)
+	log_entry := fmt.Sprintf("[%s]: %s\n", timestamp, content)
+	fmt.Print(log_entry)
+	writeToFile(logFilePath, log_entry, fileMode)
 }
 
 func writeToFile(path string, content string, write_mode string) { // "w" or "a"
@@ -168,8 +168,9 @@ func webHandlerRoot(w http.ResponseWriter, r *http.Request) {
 	
 	ip, _, _ := net.SplitHostPort(r.RemoteAddr)
 	visiter_number := selectFromTable(conn, "counter", 1)[0].Count
-	log.Println("You're visiter number", visiter_number)
-	fmt.Fprintf(w, fmt.Sprintf("Hi!\nYou came from %s\nYou're %d visiter.\nWelcome!\n", ip, visiter_number))
+	logRecordMaker(APP_ACCESS_LOG_FILE, "a", fmt.Sprintf("Visiter: %d; Access from: %s", visiter_number, ip))
+	logRecordMaker(APP_LOG_FILE, "a", fmt.Sprintf("You're %dth visiter", visiter_number))
+	fmt.Fprintf(w, fmt.Sprintf("Hi!\nYou came from %s\nYou're %dth visiter.\nWelcome!\n", ip, visiter_number))
 }
 
 
@@ -177,12 +178,15 @@ func webHandlerRoot(w http.ResponseWriter, r *http.Request) {
 func webHandlerDrop(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/drop" && r.URL.Path != "/drop/" {
 		http.Error(w, r.URL.Path, http.StatusNotFound)
+		logRecordMaker(APP_ERROR_LOG_FILE, "a", fmt.Sprintf("Not found: %s", r.URL.Path))
 		return
 	}
 	dropTable(conn, "counter")
 	conn.Exec(schema)
-	log.Println("Back to the root!..")
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	ip, _, _ := net.SplitHostPort(r.RemoteAddr)
+	logRecordMaker(APP_ACCESS_LOG_FILE, "a", fmt.Sprintf("DROP Table; Access from: %s", ip))
+	logRecordMaker(APP_LOG_FILE, "a", "Table has been droppend. Back to the root!....")
+	fmt.Fprintf(w, fmt.Sprintf("Visitor's counter has been dropped...\n"))
 }
 
 type Counter struct {
@@ -208,8 +212,9 @@ func selectFromTable(conn *sqlx.DB, table_name string, id ...int) []Counter {
 		err = rows.StructScan(&counter)
 		if err != nil {
 			log.Println("error in rows scanning")
+			logRecordMaker(APP_ERROR_LOG_FILE, "a", "Error in row scanning..")
 		} 
-		log.Println("Selected {id, count}", counter)
+		logRecordMaker(APP_LOG_FILE, "a", fmt.Sprintf("Selected ID:%d Count:%d", counter.ID, counter.Count))
 		counters = append(counters, counter)
 	}
 	return counters
@@ -219,27 +224,27 @@ func selectFromTable(conn *sqlx.DB, table_name string, id ...int) []Counter {
 func insertIntoTable(conn *sqlx.DB, table_name string, field string, new_value int) error {
 	_, err := conn.Queryx(fmt.Sprintf("INSERT INTO %s (%s) VALUES(%d);", table_name, field, new_value))
 	if err != nil {
-		log.Println("insert into table was failed:", err)
+		logRecordMaker(APP_ERROR_LOG_FILE, "a", fmt.Sprintf("Failed inserting: %s", err))
 	}
-	log.Println("insert into table was successful")
+	logRecordMaker(APP_LOG_FILE, "a", "Inserting into table was successful")
 	return err
 }
 
 func updateTable(conn *sqlx.DB, table_name string, id int, field string, new_value int) error {
 	_, err := conn.Queryx(fmt.Sprintf("UPDATE %s SET %s=%d where id=%d;", table_name, field, new_value, id))
 	if err != nil {
-		log.Println("update table was failed:", err)
+		logRecordMaker(APP_ERROR_LOG_FILE, "a", fmt.Sprintf("Failed updating: %s", err))
 	}
-	log.Println("update table was successful")
+	logRecordMaker(APP_LOG_FILE, "a", "Updating was successful")
 	return err
 }
 
 func dropTable(conn *sqlx.DB, table_name string) error {
 	_, err := conn.Queryx(fmt.Sprintf("DROP TABLE %s;", table_name))
 	if err != nil {
-		log.Println("drop table failed:", err)
+		logRecordMaker(APP_ERROR_LOG_FILE, "a", fmt.Sprintf("Failed dropping: %s", err))
 	}
-	log.Println("table was successfully dropped..")
+	logRecordMaker(APP_LOG_FILE, "a", "Table dropping was successful")
 	return err
 }
 
@@ -250,7 +255,8 @@ func main() {
 
 	conn, err = sqlx.Connect("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", DB_USERNAME, DB_PASSWORD, DB_ADDRESS, DB_PORT, DB_NAME))
 	if err != nil {
-		log.Println("Can't connect to the database:", err)
+		logRecordMaker(APP_LOG_FILE, "a", fmt.Sprintf("Can't connect to the database: %v", err))
+		logRecordMaker(APP_ERROR_LOG_FILE, "a", fmt.Sprintf("Can't connect to the database: %v", err))
 		os.Exit(1)
 	}
 	defer conn.Close()
@@ -261,7 +267,7 @@ func main() {
 	m.HandleFunc("/", webHandlerRoot)
 	m.HandleFunc("/{drop:drop(?:\\/)?}", webHandlerDrop)
 
-	log.Println(fmt.Sprintf("Starting server on :%s port ... ", APP_PORT))
+	logRecordMaker(APP_LOG_FILE, "a", fmt.Sprintf("Starting server on :%s port ... ", APP_PORT))
 	if err := http.ListenAndServe(fmt.Sprintf("0.0.0.0:%s", APP_PORT), m); err != nil {
 		log.Fatal(err)
 	}

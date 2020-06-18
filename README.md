@@ -5,6 +5,7 @@ This is demo golang application which shows visitor counter by GET request.
 - golang
 - mysql DB
 - possibility to pass application config in environment variables (have precedence) or within configuration file
+- events logging to the stdout and access/error logs files
 
 ### Requiremets
 - docker
